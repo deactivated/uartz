@@ -1,0 +1,57 @@
+#!/bin/env python
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+
+from uartz.server import UartBridge, BridgeController
+
+import zmq
+from zmq.eventloop import ioloop
+from zmq.eventloop.ioloop import DelayedCallback
+from zmq.eventloop.zmqstream import ZMQStream
+ioloop.install()
+
+
+def run(opts):
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    bridge = UartBridge(executor=executor)
+    for bridge_addr in opts.bridge_addrs:
+        bridge.bind(bridge_addr)
+
+    controller = BridgeController(bridge)
+    for controller_addr in opts.controller_addrs:
+        controller.bind(controller_addr)
+
+    for dev in opts.devices:
+        path, baud = parse_device_option(dev)
+        bridge.open_uart(path, baud)
+
+    return ioloop.IOLoop.instance().start()
+
+
+def parse_device_option(devname):
+    dev = devname.split("?")
+    if len(dev) == 1:
+        return (dev[0], 9600)
+    elif len(dev) == 2:
+        return (dev[0], int(dev[1]))
+    else:
+        raise ValueError()
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("devices", action="append")
+    p.add_argument("-b", "--bridge", action="append",
+                   dest="bridge_addrs",
+                   help="PUB socket address.")
+    p.add_argument("-c", "--controller", action="append",
+                   dest="controller_addrs",
+                   help="Controller socket address.")
+    opts = p.parse_args()
+    run(opts)
+
+
+if __name__ == '__main__':
+    main()

@@ -42,7 +42,7 @@ def parse_device_option(devname):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("devices", action="append")
+    p.add_argument("devices", nargs="*")
     p.add_argument("-b", "--bridge", action="append",
                    dest="bridge_addrs",
                    help="PUB socket address.")
@@ -50,6 +50,7 @@ def main():
                    dest="controller_addrs",
                    help="Controller socket address.")
     opts = p.parse_args()
+
     run(opts)
 
 

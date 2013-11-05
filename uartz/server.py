@@ -65,9 +65,11 @@ class UartBridge(object):
         if uart is None:
             return
         self.remove_uart(uart)
-        uart.close()
 
     def update_handler(self, uart):
+        if not uart.isOpen():
+            return
+
         self.ioloop.remove_handler(uart.fileno())
         if uart.name not in self.uarts:
             return
@@ -110,8 +112,7 @@ class UartBridge(object):
         try:
             data = uart.read(4096)
         except (OSError, TypeError):   # this is a pyserial bug
-            self.remove_uart(uart)
-            self.watch_for_device(uart.name)
+            self.handle_uart_error(uart)
         else:
             self.pub_sock.send(name + b":" + data)
 
@@ -128,6 +129,7 @@ class UartBridge(object):
     def handle_uart_error(self, uart):
         self.remove_uart(uart)
         uart.close()
+        self.watch_for_device(uart.name)
 
     def watch_for_device(self, path):
         def _add_callback(future):

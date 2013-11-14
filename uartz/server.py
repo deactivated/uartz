@@ -1,4 +1,5 @@
 import json
+import logging
 import base64
 import serial
 
@@ -28,19 +29,22 @@ class UartBridge(object):
     def bind(self, addr):
         self.pub_sock.bind(addr)
 
-    def open_uart(self, path, baud, **args):
+    def open_uart(self, path, **args):
         if path in self.uarts:
             return
+
         uart_future = self.uarts[path] = self.executor.submit(
-            self._open_uart, path, baud, **args)
+            self._open_uart, path, **args)
+
         self.ioloop.add_future(uart_future, self._open_uart_callback)
         return uart_future
 
     def _open_uart(self, path, baud, **args):
         try:
-            print("opening %r..." % path)
-            uart = serial.Serial(path, baud, timeout=0.05)
-            print("opened.")
+            logging.info("Opening %r...")
+            uart = serial.Serial(path, baud, timeout=0.5)
+            uart.create_args = args
+            logging.info("Opened %r.")
         except:
             return False, path, None
         else:
@@ -129,9 +133,10 @@ class UartBridge(object):
     def handle_uart_error(self, uart):
         self.remove_uart(uart)
         uart.close()
-        self.watch_for_device(uart.name)
+        self.watch_for_device(
+            uart.name, baud=uart.baudrate, **uart.create_args)
 
-    def watch_for_device(self, path):
+    def watch_for_device(self, path, **opts):
         def _add_callback(future):
             success, _, _ = future.result()
             if not success:
@@ -140,7 +145,7 @@ class UartBridge(object):
                 cb.start()
 
         def _check_device():
-            uart_future = self.open_uart(path, 9600)
+            uart_future = self.open_uart(path, **opts)
             if uart_future:
                 self.ioloop.add_future(uart_future, _add_callback)
 
@@ -172,13 +177,14 @@ class BridgeController(object):
         try:
             cmd = json.loads(cmd.decode('utf8'))
         except Exception as e:
-            print("Failure: %s" % e)
+            logging.exception("Command decode failed.")
             return self._reply(addr, {
                 "status": "FAIL",
                 "message": "Message decode failed",
                 "exception": str(e)
             })
-        print(cmd)
+
+        logging.debug("Got Command: %r", cmd)
         handlers = {
             "OPEN": self.handle_cmd_open,
             "CLOSE": self.handle_cmd_close,
@@ -211,7 +217,10 @@ class BridgeController(object):
     def handle_cmd_open(self, msg):
         uart_path = msg["path"]
         baud = int(msg.get("baud")) or 9600
-        uart_future = self.bridge.open_uart(uart_path, baud)
+        try:
+            uart_future = self.bridge.open_uart(uart_path, baud=baud)
+        except:
+            logging.exception("UART Open Failed.")
         yield gen.YieldFuture(uart_future)
 
     @gen.coroutine

@@ -1,5 +1,6 @@
 #!/bin/env python
 
+import logging
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -27,6 +28,7 @@ def run(opts):
         path, baud = parse_device_option(dev)
         bridge.open_uart(path, baud)
 
+    logging.info("Uartz is listening.")
     return ioloop.IOLoop.instance().start()
 
 
@@ -41,12 +43,14 @@ def parse_device_option(devname):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     p = argparse.ArgumentParser()
     p.add_argument("devices", nargs="*")
-    p.add_argument("-b", "--bridge", action="append",
+    p.add_argument("-b", "--bridge", action="append", default=(),
                    dest="bridge_addrs",
                    help="PUB socket address.")
-    p.add_argument("-c", "--controller", action="append",
+    p.add_argument("-c", "--controller", action="append", default=(),
                    dest="controller_addrs",
                    help="Controller socket address.")
     opts = p.parse_args()
